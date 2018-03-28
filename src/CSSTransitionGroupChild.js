@@ -12,7 +12,7 @@
 
 
 import { h, Component } from 'preact';
-import { getComponentBase, onlyChild, requestAnimationFrame } from './util';
+import { getComponentBase, onlyChild, batchUIMutation } from './util';
 import { addClass, removeClass } from './CSSCore';
 import { addEndEventListener, removeEndEventListener } from './TransitionEvents';
 
@@ -69,17 +69,14 @@ export class CSSTransitionGroupChild extends Component {
 
 	queueClass(className) {
 		this.classNameQueue.push(className);
-
-		if (!this.rafHandle) {
-			this.rafHandle = requestAnimationFrame(this.flushClassNameQueue);
-		}
+		this.cancelClassNameMutation = batchUIMutation(this.flushClassNameQueue);
 	}
 
 	stop() {
-		if (this.rafHandle) {
-			this.classNameQueue.length = 0;
-			this.rafHandle = null;
+		if (this.cancelClassNameMutation) {
+			this.cancelClassNameMutation();
 		}
+		this.classNameQueue.length = 0;
 		if (this.endListener) {
 			this.endListener();
 		}
@@ -90,7 +87,6 @@ export class CSSTransitionGroupChild extends Component {
 			addClass(getComponentBase(this), this.classNameQueue.join(' '));
 		}
 		this.classNameQueue.length = 0;
-		this.rafHandle = null;
 	};
 
 	componentWillMount() {
@@ -99,8 +95,10 @@ export class CSSTransitionGroupChild extends Component {
 	}
 
 	componentWillUnmount() {
+		if (this.cancelClassNameMutation) {
+			this.cancelClassNameMutation();
+		}
 		this.classNameQueue.length = 0;
-		this.rafHandle = null;
 		this.transitionTimeouts.forEach((timeout) => {
 			clearTimeout(timeout);
 		});
