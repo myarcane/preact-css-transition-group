@@ -22,12 +22,24 @@ function filterNullChildren(children) {
 	});
 }
 
-var requestAnimationFrame = function (callback) {
+var batchUIMutation = function (fnMutatingUI) {
 	if (typeof window !== 'undefined' && window.requestAnimationFrame) {
-		window.requestAnimationFrame(callback);
-	} else {
-		setTimeout(callback, 17);
+		var _id = requestAnimationFrame(function () {
+			cancelAnimationFrame(_id);
+			fnMutatingUI();
+		});
+		return function () {
+			return cancelAnimationFrame(_id);
+		};
 	}
+
+	var id = setTimeout(function () {
+		clearTimeout(id);
+		fnMutatingUI();
+	});
+	return function () {
+		return clearTimeout(id);
+	};
 };
 
 function find(arr, iter) {
@@ -354,7 +366,6 @@ var CSSTransitionGroupChild = function (_Component) {
 				addClass(getComponentBase(_this), _this.classNameQueue.join(' '));
 			}
 			_this.classNameQueue.length = 0;
-			_this.rafHandle = null;
 		}, _temp), possibleConstructorReturn(_this, _ret);
 	}
 
@@ -408,17 +419,14 @@ var CSSTransitionGroupChild = function (_Component) {
 
 	CSSTransitionGroupChild.prototype.queueClass = function queueClass(className) {
 		this.classNameQueue.push(className);
-
-		if (!this.rafHandle) {
-			this.rafHandle = requestAnimationFrame(this.flushClassNameQueue);
-		}
+		this.cancelClassNameMutation = batchUIMutation(this.flushClassNameQueue);
 	};
 
 	CSSTransitionGroupChild.prototype.stop = function stop() {
-		if (this.rafHandle) {
-			this.classNameQueue.length = 0;
-			this.rafHandle = null;
+		if (this.cancelClassNameMutation) {
+			this.cancelClassNameMutation();
 		}
+		this.classNameQueue.length = 0;
 		if (this.endListener) {
 			this.endListener();
 		}
@@ -430,8 +438,10 @@ var CSSTransitionGroupChild = function (_Component) {
 	};
 
 	CSSTransitionGroupChild.prototype.componentWillUnmount = function componentWillUnmount() {
+		if (this.cancelClassNameMutation) {
+			this.cancelClassNameMutation();
+		}
 		this.classNameQueue.length = 0;
-		this.rafHandle = null;
 		this.transitionTimeouts.forEach(function (timeout) {
 			clearTimeout(timeout);
 		});

@@ -14,11 +14,18 @@ export function filterNullChildren(children) {
 	return children && children.filter(i => i !== null);
 }
 
-export const requestAnimationFrame = (callback) => {
+export const batchUIMutation = (fnMutatingUI) => {
 	if (typeof window !== 'undefined' && window.requestAnimationFrame) {
-		window.requestAnimationFrame(callback);
+		const id = requestAnimationFrame(() => {
+			cancelAnimationFrame(id);
+			fnMutatingUI();
+		});
+		return () => cancelAnimationFrame(id);
 	}
-	else {
-		setTimeout(callback, 17);
-	}
+
+	const id = setTimeout(() => {
+		clearTimeout(id);
+		fnMutatingUI();
+	});
+	return () => clearTimeout(id);
 };
